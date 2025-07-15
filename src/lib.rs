@@ -98,6 +98,27 @@ impl CHIP8 {
                 }
                 self.increment_pc();
             }
+            0x4 => {
+                let reg: u8 = (byte1 as u8) & 0x0F;
+                if self.regs[reg as usize] != (byte2 as u8) {
+                    self.increment_pc();
+                }
+                self.increment_pc();
+            }
+            0x5 => {
+                let reg1: u8 = (byte1 as u8) & 0x0F;
+                let reg2: u8 = ((byte2 as u8) & 0x0F) >> 4;
+                if self.regs[reg1 as usize] == self.regs[reg2 as usize] {
+                    self.increment_pc();
+                }
+                self.increment_pc();
+            }
+            0x6 => {
+                let value: u8 = byte2 as u8;
+                let reg: u8 = (byte1 & 0x0F) as u8;
+                self.regs[reg as usize] = value;
+                self.increment_pc();
+            }
             _ => {
                 panic!("Undefined instruction\n");
             },
