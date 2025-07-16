@@ -1,4 +1,5 @@
 use std::usize;
+use std::fs;
 
 use rand::prelude::Rng;
 
@@ -29,12 +30,12 @@ pub struct CHIP8 {
     graphics: [u8; 64 * 32],
     regs: [u8; 16],
     pc: u16,
-    // delay_timer: u8,
-    // sound_timer: u8,
+    delay_timer: u8,
+    sound_timer: u8,
     index: u16,
     sp: usize,
     stack : [u16; 16],
-    // keys: [u8; 16],
+    keys: [u8; 16],
 }
 
 impl CHIP8 {
@@ -43,12 +44,12 @@ impl CHIP8 {
             ram: [0; 0x1000],
             graphics: [0; 64 * 32],
             stack: [0; 16],
-            // keys: [0; 16],
+            keys: [0; 16],
             regs: [0; 16],
 
             opcode: 0,
-            // delay_timer: 0,
-            // sound_timer: 0,
+            delay_timer: 0,
+            sound_timer: 0,
             index: 0,
             sp: 0,
             pc: 0x200,
@@ -59,8 +60,19 @@ impl CHIP8 {
         chip
     }
 
-    pub fn load_rom(&mut self, rom: &[u8]) {
-        self.ram[0..rom.len()].copy_from_slice(rom);  
+    pub fn load_rom(&mut self, file_path: &str) {
+        let contents = fs::read(file_path);
+        match contents {
+            Ok(buff) => {
+                let len = buff.len();
+                for i in 0..len {
+                    self.ram[0x200 + i] = buff[i];
+                }
+            },
+            _ => {
+                panic!("Invalid ROM path provided");
+            },
+        }
     }
 
     pub fn increment_pc(&mut self) {
@@ -186,6 +198,102 @@ impl CHIP8 {
                 self.regs[x] = result;
                 self.increment_pc();
             }
+            0xD => {
+                self.regs[0xF] = 0;
+                let xx = ((byte1 as u8) & 0x0F) as usize;
+                let yy = ((byte2 as u8) & 0xF0 >> 4) as usize;
+                let nn = ((byte2 & 0x0F) as u8) as usize;
+
+                let regx = self.regs[xx] as usize;
+                let regy = self.regs[yy] as usize;
+                let mut y: usize = 0;
+                while y < nn {
+                    let pixel = self.ram[(self.index as usize) + y];
+                    y += 1;
+                    let mut x = 0;
+                    while x < 8 {
+                        let msb = 0x80;
+                        if pixel & (msb >> x) != 0 {
+                            let t_x = (regx + x) % 64;
+                            let t_y = (regy + y) % 32;
+                            let index = t_x + t_y * 64;
+                            self.graphics[index] ^= 1;
+                            if self.graphics[index] == 0 {
+                                self.regs[0xF] = 1;
+                            }
+                        }
+                        x += 1;
+                    }
+                }
+                self.increment_pc();
+            },
+            0xE => {
+                let x = ((byte1 as u8) & 0x0F) as usize;
+                let kk = byte2 as usize;
+                if kk == 0x9E {
+                    if self.regs[x] == 1 {
+                        self.increment_pc();
+                    }
+                } else if kk == 0xA1 {
+                    if self.regs[x] != 1 {
+                        self.increment_pc();
+                    }
+                }
+                self.increment_pc();
+            },
+            0xF => {
+                let mode = byte2;
+                let x = ((byte1 as u8) & 0x0F) as usize;
+                match mode {
+                    0x07 => {
+                        self.regs[x] = self.delay_timer;
+                    },
+                    0x0A => {
+                        let mut key_pressed: bool = false;
+                        for n in 0..15 {
+                            if self.keys[n] != 0 {
+                                self.regs[x] = self.keys[n];
+                                key_pressed = true;
+                                break;
+                            }
+                        }
+                        if !key_pressed {
+                            return ;
+                        }
+                    },
+                    0x15 => {
+                        self.delay_timer = self.regs[x];
+                    },
+                    0x18 => {
+                        self.sound_timer = self.regs[x];
+                    },
+                    0x1E => {
+                        self.index = self.regs[x] as u16;
+                    },
+                    0x29 => {
+                        if self.regs[x] < 16 {
+                            self.index = (self.regs[x] as u16) * 0x05;
+                        }
+                    },
+                    0x33 => {
+                        self.ram[self.index as usize] = self.regs[x] / 100;
+                        self.ram[self.index as usize + 1] = (self.regs[x] / 10) % 10;
+                        self.ram[self.index as usize + 2] = self.regs[x] % 10;
+                    },
+                    0x55 => {
+                        for i in 0..x {
+                            self.ram[(self.index as usize) + i] = self.regs[i];
+                        }
+                    },
+                    0x65 => {
+                        for i in 0..x {
+                            self.regs[i] = self.ram[(self.index as usize) + i];
+                        }
+                    },
+                    _ => {},
+                }
+                self.increment_pc();
+            },
             _ => {
                 panic!("Undefined instruction\n");
             },
@@ -200,9 +308,10 @@ mod tests {
     #[test]
     fn load_fake_rom() {
         let mut result = CHIP8::new();
-        let vec: [u8; 100] = [1; 100];
-        result.load_rom(&vec[0..100]);
-    assert_eq!(&vec[0..100], &result.ram[0..100]);
+        result.load_rom("roms/games/Cave.ch8");
+        for _ in 0..100 {
+            result.cycle();
+        }
     }
 
     #[test]
