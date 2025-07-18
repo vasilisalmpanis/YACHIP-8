@@ -27,7 +27,7 @@ pub const FONTSET: [u8; FONTSET_SIZE] = [
 pub struct CHIP8 {
     ram: [u8; 0x1000],
     opcode: u16,
-    graphics: [u8; 64 * 32],
+    pub graphics: [u8; 64 * 32],
     regs: [u8; 16],
     pc: u16,
     delay_timer: u8,
@@ -60,6 +60,16 @@ impl CHIP8 {
         chip
     }
 
+    #[inline]
+    pub fn press_key(&mut self, idx: usize) {
+        self.keys[idx] = 1;
+    }
+
+    #[inline]
+    pub fn release_key(&mut self, idx: usize) {
+        self.keys[idx] = 0;
+    }
+
     pub fn load_rom(&mut self, file_path: &str) {
         let contents = fs::read(file_path);
         match contents {
@@ -85,6 +95,7 @@ impl CHIP8 {
         self.opcode = (byte1 << 8) | byte2;
 
         let ins: u8 = (byte1 as u8) >> 4;
+        println!("opcode {:#x}", self.opcode);
         match ins {
             0x0 => {
                 match self.opcode {
@@ -93,7 +104,7 @@ impl CHIP8 {
                         self.sp -= 1;
                         self.pc = self.stack[self.sp];
                     }
-                    _ => panic!("Undefined opcode\n")
+                    _ => panic!("Undefined opcode {}\n", self.opcode)
                 }
                 self.increment_pc();
             },

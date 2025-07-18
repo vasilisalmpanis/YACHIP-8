@@ -130,7 +130,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "yachip-8"
+name = "yachip8"
 version = "0.1.0"
 dependencies = [
  "rand",
