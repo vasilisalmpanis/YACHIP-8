@@ -95,7 +95,7 @@ impl CHIP8 {
         self.opcode = (byte1 << 8) | byte2;
 
         let ins: u8 = (byte1 as u8) >> 4;
-        println!("opcode {:#x}", self.opcode);
+        // println!("opcode {:#x}", self.opcode);
         match ins {
             0x0 => {
                 match self.opcode {
@@ -130,7 +130,7 @@ impl CHIP8 {
             }
             0x5 => {
                 let reg1: u8 = (byte1 as u8) & 0x0F;
-                let reg2: u8 = ((byte2 as u8) & 0x0F) >> 4;
+                let reg2: u8 = (byte2 as u8) >> 4;
                 if self.regs[reg1 as usize] == self.regs[reg2 as usize] {
                     self.increment_pc();
                 }
@@ -150,7 +150,7 @@ impl CHIP8 {
             },
             0x8 => {
                 let x = ((byte1 as u8) & 0x0F) as usize;
-                let y = ((byte2 as u8) & 0xF0 >> 4) as usize;
+                let y = ((byte2 as u8) >> 4) as usize;
                 let m = (byte2 & 0x0F) as u8;
                 match m {
                 0x0 => {self.regs[x as usize] = self.regs[y as usize]},
@@ -186,7 +186,7 @@ impl CHIP8 {
             },
             0x9 => {
                 let reg1: u8 = (byte1 as u8) & 0x0F;
-                let reg2: u8 = ((byte2 as u8) & 0x0F) >> 4;
+                let reg2: u8 = (byte2 as u8) >> 4;
                 if self.regs[reg1 as usize] != self.regs[reg2 as usize] {
                     self.increment_pc();
                 }
@@ -197,8 +197,7 @@ impl CHIP8 {
                 self.increment_pc();
             }
             0xB => {
-                self.index = self.opcode & 0x0FFF;
-                self.pc = self.opcode & 0x0FFF + (self.regs[0] as u16);
+                self.pc = (self.opcode & 0x0FFF) + (self.regs[0] as u16);
                 self.increment_pc();
             }
             0xC => {
@@ -212,7 +211,7 @@ impl CHIP8 {
             0xD => {
                 self.regs[0xF] = 0;
                 let xx = ((byte1 as u8) & 0x0F) as usize;
-                let yy = ((byte2 as u8) & 0xF0 >> 4) as usize;
+                let yy = ((byte2 as u8) >> 4) as usize;
                 let nn = ((byte2 & 0x0F) as u8) as usize;
 
                 let regx = self.regs[xx] as usize;
@@ -242,11 +241,11 @@ impl CHIP8 {
                 let x = ((byte1 as u8) & 0x0F) as usize;
                 let kk = byte2 as usize;
                 if kk == 0x9E {
-                    if self.regs[x] == 1 {
+                    if self.keys[self.regs[x] as usize] == 1 {
                         self.increment_pc();
                     }
                 } else if kk == 0xA1 {
-                    if self.regs[x] != 1 {
+                    if self.keys[self.regs[x] as usize] != 1 {
                         self.increment_pc();
                     }
                 }
@@ -261,9 +260,9 @@ impl CHIP8 {
                     },
                     0x0A => {
                         let mut key_pressed: bool = false;
-                        for n in 0..15 {
+                        for n in 0..16 {
                             if self.keys[n] != 0 {
-                                self.regs[x] = self.keys[n];
+                                self.regs[x] = n as u8;
                                 key_pressed = true;
                                 break;
                             }
@@ -279,7 +278,7 @@ impl CHIP8 {
                         self.sound_timer = self.regs[x];
                     },
                     0x1E => {
-                        self.index = self.regs[x] as u16;
+                        self.index = self.index.wrapping_add(self.regs[x] as u16);
                     },
                     0x29 => {
                         if self.regs[x] < 16 {
@@ -292,7 +291,7 @@ impl CHIP8 {
                         self.ram[self.index as usize + 2] = self.regs[x] % 10;
                     },
                     0x55 => {
-                        for i in 0..x {
+                        for i in 0..=x {
                             self.ram[(self.index as usize) + i] = self.regs[i];
                         }
                     },
