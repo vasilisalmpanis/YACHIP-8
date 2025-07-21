@@ -144,8 +144,8 @@ impl CHIP8 {
             }
             0x7 => {
                 let reg: u8 = byte1 as u8 & 0xF;
-                let value = self.regs[reg as usize].wrapping_add(byte2 as u8);
-                self.regs[reg as usize] = value;
+                let value = byte2 as u8;
+                self.regs[reg as usize] = self.regs[reg as usize].wrapping_add(value);
                 self.increment_pc();
             },
             0x8 => {
@@ -198,7 +198,6 @@ impl CHIP8 {
             }
             0xB => {
                 self.pc = (self.opcode & 0x0FFF) + (self.regs[0] as u16);
-                self.increment_pc();
             }
             0xC => {
                 let mut rng = rand::rng();
@@ -209,30 +208,37 @@ impl CHIP8 {
                 self.increment_pc();
             }
             0xD => {
-                self.regs[0xF] = 0;
-                let xx = ((byte1 as u8) & 0x0F) as usize;
-                let yy = ((byte2 as u8) >> 4) as usize;
-                let nn = ((byte2 & 0x0F) as u8) as usize;
+                // DXYN: Draws a sprite at (VX, VY) with N bytes of height.
+                // The sprite data is read from memory, starting at the address stored in I.
+                // If any pixel is unset (from 1 to 0) during drawing, VF is set to 1.
 
-                let regx = self.regs[xx] as usize;
-                let regy = self.regs[yy] as usize;
-                let mut y: usize = 0;
-                while y < nn {
-                    let pixel = self.ram[(self.index as usize) + y];
-                    y += 1;
-                    let mut x = 0;
-                    while x < 8 {
-                        let msb = 0x80;
-                        if pixel & (msb >> x) != 0 {
-                            let t_x = (regx + x) % 64;
-                            let t_y = (regy + y) % 32;
-                            let index = t_x + t_y * 64;
-                            self.graphics[index] ^= 1;
-                            if self.graphics[index] == 0 {
+                let xx = ((byte1 as u8) & 0x0F) as usize; // VX
+                let yy = ((byte2 as u8) >> 4) as usize;  // VY
+                let height = ((byte2 & 0x0F) as u8) as usize; // N (height of the sprite in bytes)
+
+                let x_start = self.regs[xx] as usize;
+                let y_start = self.regs[yy] as usize;
+                self.regs[0xF] = 0;
+
+                const SCREEN_WIDTH: usize = 64;
+                const SCREEN_HEIGHT: usize = 32;
+
+                for sprite_row_offset in 0..height {
+                    let pixel_byte = self.ram[(self.index as usize) + sprite_row_offset];
+
+                    let screen_y = (y_start + sprite_row_offset) % SCREEN_HEIGHT;
+
+                    for sprite_col_offset in 0..8 {
+                        let screen_x = (x_start + sprite_col_offset) % SCREEN_WIDTH;
+
+                        let graphics_index = screen_y * SCREEN_WIDTH + screen_x;
+
+                        if (pixel_byte & (0x80 >> sprite_col_offset)) != 0 {
+                            if self.graphics[graphics_index] == 1 {
                                 self.regs[0xF] = 1;
                             }
+                            self.graphics[graphics_index] ^= 1;
                         }
-                        x += 1;
                     }
                 }
                 self.increment_pc();
@@ -296,7 +302,7 @@ impl CHIP8 {
                         }
                     },
                     0x65 => {
-                        for i in 0..x {
+                        for i in 0..=x {
                             self.regs[i] = self.ram[(self.index as usize) + i];
                         }
                     },
@@ -307,6 +313,15 @@ impl CHIP8 {
             _ => {
                 panic!("Undefined instruction\n");
             },
+        }
+    }
+
+    pub fn update_timers(&mut self) {
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
+        }
+        if self.sound_timer > 0 {
+            self.sound_timer -= 1;
         }
     }
 }
